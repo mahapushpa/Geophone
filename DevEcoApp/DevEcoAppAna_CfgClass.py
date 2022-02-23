@@ -11,12 +11,13 @@ Licence       : MIT
 """
 
 # ----------------------------------------------------------------------------
+import UtilAna
 try:
     import DevEcoAppAna_CfgFile as c_cfg
 except Exception:
     pass
 
-gv_DfltHost = '164.52.212.8'
+gv_DfltHost = '165.22.216.99'
 # gv_DfltHost = '127.0.0.1'
 gv_DfltPortNum = 40000
 gv_DfltInactivityTimeout = 10
@@ -96,21 +97,29 @@ class AppConfigAna:
 
     # ------------------------------------------------------------------------
     def gf_SaveConfig(self):
-        fh = open("DevEcoAppAna_CfgFile.py","w+")
+        try:
+            fh = open("DevEcoAppAna_CfgFile.py","w+")
 
-        s = "gv_Host = '" + str(self.s_host) + str("'\n")
-        fh.write( s )
+            s = "gv_Host = '" + str(self.s_host) + str("'\n")
+            fh.write( s )
+            UtilAna.gf_DebugLog( s )
 
-        s = "gv_PortNum = " + str(self.s_port) + str("\n")
-        fh.write( s )
+            s = "gv_PortNum = " + str(self.s_port) + str("\n")
+            fh.write( s )
+            UtilAna.gf_DebugLog( s )
 
-        s = "gv_InactivityTimeout = " + str(self.s_inactivity_timeout) + str("\n")
-        fh.write( s )
+            s = "gv_InactivityTimeout = " + str(self.s_inactivity_timeout) + str("\n")
+            fh.write( s )
+            UtilAna.gf_DebugLog( s )
 
-        s = "gv_DeviceMacs = " + str(self.s_dev_macs) + str("\n")
-        fh.write( s )
+            s = "gv_DeviceMacs = " + str(self.s_dev_macs) + str("\n")
+            fh.write( s )
+            UtilAna.gf_DebugLog( s )
 
-        fh.close()
+            fh.close()
+            UtilAna.gf_DebugLog("[SAVE OK] : DevEcoAppAna_CfgFile.py")
+        except Exception:
+            UtilAna.gf_DebugLog("[SAVE FAILED] : DevEcoAppAna_CfgFile.py")
 
 
 # =============================================================================
