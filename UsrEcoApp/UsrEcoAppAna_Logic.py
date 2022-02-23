@@ -12,22 +12,13 @@ Licence       : MIT
 
 # ----------------------------------------------------------------------------
 import UtilAna
-import UsrEcoAppAna_CfgClass
 import TcpClientAna_ParentSocHndl
 
 import importlib
-import numpy as np
-import matplotlib.pyplot as plt
 try:
     import UserOneCfgAna
 except  Exception:
     pass
-
-gv_DfltSec = 10
-gv_Dflt1SecDSize = 1000
-gv_DfltDSize = (gv_Dflt1SecDSize * gv_DfltSec)
-gv_DfltXAxis = np.linspace(0, gv_DfltSec, gv_DfltDSize)
-gv_ClrTbl = ['red', 'green', 'blue', 'orange', 'black']
 
 # ============================================================================
 class RxDataFrameAna:
@@ -60,8 +51,8 @@ class RxDataFrameAna:
 
 # ============================================================================
 class UsrAppAna:
-    def __init__(self, i_max_bufsize, i_debug_active):
-        self.s_cfg = UsrEcoAppAna_CfgClass.AppConfigAna()
+    def __init__(self, i_cfg, i_max_bufsize, i_debug_active):
+        self.s_cfgNew = i_cfg
         self.s_debug_active = i_debug_active
         self.s_max_bufsize = i_max_bufsize
         self.s_clt_obj = TcpClientAna_ParentSocHndl.ParentTcpClientSocHndlAna(\
@@ -76,17 +67,19 @@ class UsrAppAna:
         self.s_app_thread = None
         self.s_ticks = 0
 
-        self.s_dev_max = 0
-        self.s_dev_macs = []
-        self.s_dev_wave_data = []
+        self.s_dev_max = self.s_cfgNew.s_User_DeviceMaxAllowed
+        self.s_dev_secdata_rcvs = [False for i in range(self.s_dev_max)]
+        self.s_dev_longavgs = [0 for i in range(self.s_dev_max)]
+        self.s_dev_shrtavgs = [0 for i in range(self.s_dev_max)]
+        self.s_dev_shrtsmpls = [0 for i in range(self.s_dev_max)]
+        self.s_dev_shrtconts = [0 for i in range(self.s_dev_max)]
+        self.s_dev_idl_tmr = 0
         
-        self.s_fig = plt.figure()
-        gs = self.s_fig.add_gridspec(8, hspace=0)
-        self.s_axs = gs.subplots(sharex=True, sharey=True)
-        self.s_fig.suptitle('Eco Device Graph')
-        for ax in self.s_axs:
-            ax.label_outer()
-    
+        self.s_file_mm = self.pf_FileNameMm()
+        self.s_datafile_hndl = None
+        self.s_eventfile_hndl = None
+        self.pf_OpenFileMm()
+
     # ------------------------------------------------------------------------
     def pf_Debug(self, i_id, i_eve_id):
         if True == self.s_debug_active:
@@ -94,67 +87,135 @@ class UsrAppAna:
             UtilAna.gf_DebugLog( s )
 
     # ------------------------------------------------------------------------
+    def pf_PreareFileName(self, i_str):
+        mm = UtilAna.gf_GetNowMinutes()
+        mt = mm % self.s_cfgNew.s_FileSave_MaxDurationMin
+        mm = mm - mt
+        return mm
+
+    # ------------------------------------------------------------------------
+    def pf_FileNameMm(self):
+        mm = UtilAna.gf_GetNowMinutes()
+        mt = mm % self.s_cfgNew.s_FileSave_MaxDurationMin
+        mm = mm - mt
+        return mm
+
+    # ------------------------------------------------------------------------
+    def pf_OpenFileMm(self):
+        if self.s_datafile_hndl == None:
+            s = UtilAna.gf_UsrEcoAppFileNameStr(self.s_file_mm, "DATA_", self.s_cfgNew.s_Device_HDFilePath)
+            print(("Open File : " + s))
+            self.s_datafile_hndl = UtilAna.gf_FileAna_Open( s, "w+" )
+        
+        if self.s_eventfile_hndl == None:
+            s = UtilAna.gf_UsrEcoAppFileNameStr(self.s_file_mm, "EVENT_", self.s_cfgNew.s_Device_HDFilePath)
+            print(("Open File : " + s))
+            self.s_eventfile_hndl = UtilAna.gf_FileAna_Open( s, "w+" )
+
+    # ------------------------------------------------------------------------
+    def pf_CloseFileMm(self):
+        if self.s_datafile_hndl != None:
+            UtilAna.gf_FileAna_Close( self.s_datafile_hndl )
+            self.s_datafile_hndl = None
+
+        if self.s_eventfile_hndl != None:
+            UtilAna.gf_FileAna_Close( self.s_eventfile_hndl )
+            self.s_eventfile_hndl = None
+
+    # ------------------------------------------------------------------------
+    def pf_ChkFileMm(self):
+        mm = self.pf_FileNameMm()
+        if mm != self.s_file_mm:
+            self.pf_CloseFileMm()
+            self.s_file_mm = mm
+        self.pf_OpenFileMm()
+    
+    def pf_SaveEventFile(self, i_did, i_ecnt):
+        self.pf_ChkFileMm()
+        if None != self.s_eventfile_hndl:
+            ms = str(self.s_cfgNew.s_Device_MacIds[i_did])
+            mn = str(self.s_cfgNew.s_Device_Names[i_did])
+            dd = UtilAna.gf_GetDataStr()
+            dt = UtilAna.gf_GetTimeStr()
+            s = ms + "," + mn + "," + dd  + "," + dt + "," + str(i_ecnt) + "\n"
+            UtilAna.gf_FileAna_Write(self.s_eventfile_hndl, None, s)
+
+    def pf_SaveDataFile(self, i_did, m):
+        self.pf_ChkFileMm()
+        if None != self.s_datafile_hndl:
+            pass
+            # ms = str(self.s_cfgNew.s_Device_MacIds[i_did])
+            # mn = str(self.s_cfgNew.s_Device_Names[i_did])
+            # dd = UtilAna.gf_GetDataStr()
+            # dt = UtilAna.gf_GetTimeStr()
+            # s = ms + "," + mn + "," + dd  + "," + dt + "," + str(m) + "\n"
+            # UtilAna.gf_FileAna_Write(self.s_datafile_hndl, None, s)
+
+    # ------------------------------------------------------------------------
     def pf_IsDevMacPresent(self, i_mac):
         if 0 != i_mac:
             if 0 != self.s_dev_max:
                 for i in range(0, self.s_dev_max, 1):
-                    if i_mac == self.s_dev_macs[i]:
+                    if i_mac == self.s_cfgNew.s_Device_MacIds[i]:
                         return i
         return self.s_dev_max
 
     # ------------------------------------------------------------------------
-    def pf_AddMac(self, i_mac):
-        if 0 != i_mac:
-            i = self.pf_IsDevMacPresent( i_mac )
-            if i == self.s_dev_max:
-                self.s_dev_macs.append( i_mac )
-                self.s_dev_wave_data.append( [0]*gv_DfltDSize )
-                self.s_dev_max += 1
+    def pf_updateWaveData(self, i_bufid, i_data):
+        bf = self.s_cfgNew.s_Device_LiveData
+        ds1 = self.s_cfgNew.s_Device_SamplePerSec
+        ddm = self.s_cfgNew.s_Device_MaxFileDataSize
+        bf[i_bufid][ddm-ds1:ddm] = i_data[0:ds1]
+        bf[i_bufid][0:ddm-ds1] = bf[i_bufid][ds1:ddm]
 
     # ------------------------------------------------------------------------
-    def pf_updatewavedata(self, i_bufid, i_start, i_end, i_data):
-        j = 0
-        for i in range(i_start, i_end, 1):
-            self.s_dev_wave_data[i_bufid][i] = i_data[j]
-            j += 1
+    def pf_RxdSaveDeviceWaveData(self, i_bufid, i_data):
+        self.s_dev_secdata_rcvs[i_bufid] = True
+        self.pf_updateWaveData(i_bufid, i_data)
 
     # ------------------------------------------------------------------------
-    def pf_SaveDeviceWaveData(self, i_bufid, i_data):
-        sk = gv_DfltDSize-gv_Dflt1SecDSize
-        ek = gv_DfltDSize
-        self.pf_updatewavedata(i_bufid, sk, ek, i_data )
+    def pf_IdleSaveDeviceWaveData(self):
+        self.s_dev_idl_tmr = self.s_dev_idl_tmr + 1
+        if self.s_dev_idl_tmr > 2:
+            self.s_dev_idl_tmr = 0
+            self.pf_ChkFileMm()
+            m = [0]*self.s_cfgNew.s_Device_SamplePerSec
+            for i in range(0, self.s_dev_max, 1):
+                if True != self.s_dev_secdata_rcvs[i]:
+                    self.s_dev_longavgs[i] = 0
+                    self.pf_updateWaveData(i,m)
+                else:
+                    self.s_dev_secdata_rcvs[i] = False
 
     # ------------------------------------------------------------------------
-    def pf_ShiftDeviceWaveData(self):
-        sk = gv_DfltDSize-gv_Dflt1SecDSize
-        for i in range(0, self.s_dev_max, 1):
-            self.pf_updatewavedata(i, 0, sk, self.s_dev_wave_data[i][gv_Dflt1SecDSize:])
-            m = [0]*gv_Dflt1SecDSize
-            self.pf_SaveDeviceWaveData( i, m )
-
-    def gf_ShowDeviceData(self):
-        # show graph here
-        for i in range(0, self.s_dev_max, 1):
-            c = gv_ClrTbl[i%5]
-            self.s_axs[i].clear()
-            self.s_axs[i].plot(gv_DfltXAxis, self.s_dev_wave_data[i], c)
-            self.s_axs[i].set_ylabel(str(self.s_dev_macs[i]), rotation=0, labelpad=40)
-        if 0 == self.s_dev_max:
-            self.s_axs[0].clear()
-            self.s_axs[0].plot(gv_DfltXAxis, gv_DfltXAxis)
-        self.s_fig.canvas.draw()
-        self.s_fig.canvas.flush_events()
+    def gf_GetLiveGuiNSecData(self, i_sec, i_devcnt, i_mac, i_data, i_eve_cnts, i_eve_rates):
+        f = False
+        ds1 = self.s_cfgNew.s_Device_SamplePerSec
+        ddm = self.s_cfgNew.s_Device_MaxFileDataSize
+        s = ddm - (i_sec+1)*ds1
+        e = ddm - (1)*ds1
+        m = [0]*(e-s)
+        for i in range(0, i_devcnt, 1):
+            f = False
+            for j in range(0, self.s_dev_max, 1):
+                if i_mac[i] == self.s_cfgNew.s_Device_MacIds[j]:
+                    i_data[i][0:e-s] = self.s_cfgNew.s_Device_LiveData[j][s:e]
+                    i_eve_cnts[i] = self.s_cfgNew.s_Device_EventCounts[j]
+                    i_eve_rates[i] = self.s_cfgNew.s_Device_LastEventRates[j]
+                    f = True
+                    break
+            if False == f:
+                i_data[i][0:e-s] = m[0:e-s]
+                i_eve_cnts[i] = 0
+                i_eve_rates[i] = 0
                 
-        # shift data by one second and fill zero
-        self.pf_ShiftDeviceWaveData()
-
-
+        
     # ------------------------------------------------------------------------
     def pf_SendUserCmd(self, i_len, i_cmd_type):
         i_len += 2
         self.s_out_msg_buf[0:2] = UtilAna.gf_FillUintToBinaryLi(i_len, 2)
         self.s_out_msg_buf[2] = i_cmd_type
-        self.s_out_msg_buf[3:5] = UtilAna.gf_FillUintToBinaryLi( self.s_cfg.s_self_userid, 2 )
+        self.s_out_msg_buf[3:5] = UtilAna.gf_FillUintToBinaryLi( self.s_cfgNew.s_UserSelfId, 2 )
         self.s_out_msg_buf[i_len-2:i_len] = [0]*2
         self.s_clt_obj.gf_SendOutMsg( 1, self.s_out_msg_buf[0:i_len] )
 
@@ -213,7 +274,7 @@ class UsrAppAna:
 
    # ------------------------------------------------------------------------
     def pf_ChkUsrOneCfgChange(self):
-        if 1 != self.s_cfg.s_self_userid:
+        if 1 != self.s_cfgNew.s_UserSelfId:
             return
         importlib.reload(UserOneCfgAna)
         try:
@@ -270,26 +331,89 @@ class UsrAppAna:
         fh.close()
 
     # ------------------------------------------------------------------------
+    def gf_EventFoundLogic(self, i_did, i_ds1, i_rcv_data):
+        m = [0] * i_ds1
+        k = 18
+
+        lta_l = self.s_dev_longavgs[i_did]
+        lta_n = lta_l
+        
+        sta_lav = self.s_dev_shrtavgs[i_did]
+        sta_lscnt = self.s_dev_shrtsmpls[i_did]
+        sta_lcesa = self.s_dev_shrtconts[i_did]
+ 
+        dev_eve_cnts = self.s_cfgNew.s_Device_EventCounts[i_did]
+        dev_eve_times = self.s_cfgNew.s_Device_LastEventTimes[i_did]
+        dev_eve_rates = self.s_cfgNew.s_Device_LastEventRates[i_did]
+        
+        sta_cvc = self.s_cfgNew.s_Device_StaSmplCnts[i_did]
+        sta_efra = self.s_cfgNew.s_Device_StaLtaRatios[i_did]
+        sta_efcc = self.s_cfgNew.s_Device_StaPattnCnts[i_did]
+        eve_found = False
+        
+        for i in range(0, i_ds1, 1):
+            z = UtilAna.gf_BinaryLiToInt( i_rcv_data[k:k+2],2 )
+            z = round( (((z * 5.12)/65536) - 2.56), 5)
+            m[i] = z
+            lta_n = lta_n + abs(z)
+            sta_lav = sta_lav + abs(z)
+            sta_lscnt = sta_lscnt + 1
+            if sta_lscnt >= sta_cvc:
+                sta_lscnt = 0
+                sta_lav = round((sta_lav/(sta_cvc+1)), 5)
+                if 0 == lta_l:
+                    lta_l = sta_lav
+                    z = 1
+                else:
+                    z = sta_lav / lta_l
+                if z > sta_efra:
+                    sta_lcesa = sta_lcesa + 1
+                    if sta_lcesa == sta_efcc:
+                        eve_found = True
+                        dev_eve_cnts = dev_eve_cnts + 1
+                        tms = UtilAna.gf_GetDataTimeStemp()
+                        tmd = tms - dev_eve_times
+                        if 0 == tmd:
+                            tmd = 1
+                        dev_eve_rates = round( (3600/tmd), 3)
+                        dev_eve_times = tms
+                        self.pf_SaveEventFile(i_did, dev_eve_cnts)
+                else:
+                    sta_lcesa = 0
+            k += 2
+        
+        lta_l = round( (lta_n/(i_ds1+1)), 5)
+        self.s_dev_longavgs[i_did] = lta_l
+        
+        self.s_dev_shrtavgs[i_did] = sta_lav
+        self.s_dev_shrtsmpls[i_did] = sta_lscnt
+        self.s_dev_shrtconts[i_did] = sta_lcesa
+        
+        self.s_cfgNew.s_Device_EventCounts[i_did] = dev_eve_cnts
+        self.s_cfgNew.s_Device_LastEventTimes[i_did] = dev_eve_times
+        self.s_cfgNew.s_Device_LastEventRates[i_did] = dev_eve_rates
+        self.pf_RxdSaveDeviceWaveData(i_did, m)
+        self.pf_SaveDataFile(i_did, m)
+        if True == eve_found:
+            self.s_cfgNew.s_Cfg_Change = True
+            self.s_cfgNew.gf_SaveCfg()
+        
+    # ------------------------------------------------------------------------
     def gf_ExeDevEveData(self, i_rcvlen, i_rcv_data):
+        ds1 = self.s_cfgNew.s_Device_SamplePerSec
         inlen = UtilAna.gf_BinaryLiToInt(i_rcv_data[5:7], 2)
         intype = i_rcv_data[7]
         inmac = UtilAna.gf_BinaryLiToInt(i_rcv_data[8:14], 6)
         if inlen == (i_rcvlen - 7):
             if 8 == intype:      # data frame
-                if 2063 == inlen:
+                if ((ds1*2)+15) == inlen:
                     t = self.pf_IsDevMacPresent(inmac)
                     if t == self.s_dev_max:
-                        self.pf_AddMac( inmac )
-                        s = "DevData_MAC_" + str(inmac)
+                        s = "DevData_MAC_" + str(inmac) + " : Not Configured"
                         UtilAna.gf_DebugLog( s )
+                        return
                     # save data in device data
-                    m = [0] * 1000
-                    k = 18
-                    for i in range(0,1000,1):
-                        m[i] = UtilAna.gf_BinaryLiToInt(i_rcv_data[k:k+2],2)
-                        m[i] = m[i] * 5.12/65536 - 2.56
-                        k += 2
-                    self.pf_SaveDeviceWaveData(t, m)
+                    self.gf_EventFoundLogic(t, ds1, i_rcv_data)
             elif 9 == intype:    # device info
                 if 11 == inlen:
                     s = "DevInfo_MAC_" + str(inmac)
@@ -302,7 +426,7 @@ class UsrAppAna:
         inlen = UtilAna.gf_BinaryLiToInt(i_rcv_data[0:2], 2)
         inid = UtilAna.gf_BinaryLiToInt(i_rcv_data[3:5], 2)
         intype = i_rcv_data[2]
-        if inid == self.s_cfg.s_self_userid:
+        if inid == self.s_cfgNew.s_UserSelfId:
             if rcvlen == inlen:
                 if 128+1 == intype:       # keep alive response
                     self.s_usr_tmr = 0
@@ -354,6 +478,7 @@ class UsrAppAna:
         self.s_app_thread_active = True
         while True == self.s_app_thread_active:
             UtilAna.gf_Sleep(0.990)
+            self.pf_IdleSaveDeviceWaveData()
             self.s_ticks += 1
             if 0 == self.s_usr_state:
                 self.s_usr_tmr += 1
@@ -376,20 +501,19 @@ class UsrAppAna:
                 if 0 == t:
                     self.pf_ChkUsrOneCfgChange()
                 self.s_usr_tmr = self.s_usr_tmr + 1
-                if self.s_usr_tmr > (self.s_cfg.s_inactivity_timeout-5):
+                if self.s_usr_tmr > (self.s_cfgNew.s_RemoteHost_InactivitySec-5):
                     self.pf_SendKeepAliveCmd()
-                elif self.s_usr_tmr > self.s_cfg.s_inactivity_timeout:
+                elif self.s_usr_tmr > self.s_cfgNew.s_RemoteHost_InactivitySec:
                     self.s_clt_obj.gf_CloseClient( 1 )
                     self.s_usr_state = 1
 
     # ------------------------------------------------------------------------
     def gf_Start(self):
-        self.s_cfg.gf_LoadConfig()
         self.s_rxq_thread = UtilAna.gf_StartThreadAna(self.pf_ThreadFun_IncommingEve)
         self.s_app_thread = UtilAna.gf_StartThreadAna(self.pf_ThreadFun_App)
-        ih = self.s_cfg.s_host
-        ip = self.s_cfg.s_port
-        it = self.s_cfg.s_inactivity_timeout
+        ih = self.s_cfgNew.s_RemoteHost_IP
+        ip = self.s_cfgNew.s_RemoteHost_Port
+        it = self.s_cfgNew.s_RemoteHost_InactivitySec
         self.s_clt_obj.gf_Start(ih, ip, 1, it, 15)
 
 
@@ -406,6 +530,7 @@ class UsrAppAna:
         while True == self.s_rxq_thread.is_alive():
             UtilAna.gf_Sleep(1)
         self.s_rxq_thread = None
+        self.pf_CloseFileMm()
 
 # ============================================================================
 # end of file
