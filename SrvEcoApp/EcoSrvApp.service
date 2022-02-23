@@ -1,0 +1,12 @@
+[Unit]
+Description=Eco Server Application start
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/bin/bash /home/cobra/SrvEcoApp/EcoRun.sh
+TimeoutStartSec=0
+
+[Install]
+WantedBy=default.target
+

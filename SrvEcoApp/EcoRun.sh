@@ -1,5 +1,8 @@
 ufw reload
-nohup python3 /opt/DAQ-server/SrvEcoAppAna_Main.py
+
+python3 /home/cobra/SrvEcoApp/SrvEcoAppAna_Main.py
+
+# nohup python3 /home/cobra/SrvEcoApp/SrvEcoAppAna_Main.py
 
 
 
